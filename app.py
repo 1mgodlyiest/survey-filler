@@ -185,6 +185,18 @@ with st.sidebar:
         help="Safety cap: the bot will stop after running this many steps or pages to prevent infinite loops."
     )
     
+    # Submissions iterations setting
+    num_iterations = st.number_input(
+        "Number of Submissions (Iterations)",
+        min_value=1,
+        max_value=100,
+        value=1,
+        step=1,
+        help="Specify how many times you want the bot to fill out and submit the survey."
+    )
+    
+    st.markdown("---")
+    
     st.markdown("""
     ### ℹ️ About
     This bot uses **Playwright** to load the target survey page and run a visual annotation script (similar to Vimium/browser-use) which overlays numbered badges on each form input.
@@ -271,78 +283,96 @@ if start_btn:
         # Render logs in reverse order so newest is at top, or standard
         logs_placeholder.markdown(f'<div class="console-log">{"".join(logs[::-1])}</div>', unsafe_allow_html=True)
 
-    log_message("Starting survey filler process...", "info")
-    status_placeholder.info("Initializing Playwright and loading page...")
+    log_message(f"Starting survey filler process for {num_iterations} submissions...", "info")
     
-    # Start generator
-    agent_generator = run_survey_filler(
-        url=survey_url,
-        persona=persona_desc,
-        api_key=api_key,
-        model_name="gemma-4-31b-it",
-        max_steps=max_steps,
-        headless=not run_mode
-    )
+    fatal_error = False
     
-    last_screenshot = None
-    
-    for step_data in agent_generator:
-        status_type = step_data.get("status")
+    for iteration in range(1, num_iterations + 1):
+        if fatal_error:
+            break
+            
+        log_message(f"--- SUBMISSION {iteration}/{num_iterations} STARTING ---", "info")
+        status_placeholder.info(f"Submission {iteration}/{num_iterations}: Initializing Playwright...")
         
-        if status_type == "info":
-            msg = step_data.get("message")
-            log_message(msg, "info")
-            status_placeholder.info(msg)
+        # Start generator
+        agent_generator = run_survey_filler(
+            url=survey_url,
+            persona=persona_desc,
+            api_key=api_key,
+            model_name="gemma-4-31b-it",
+            max_steps=max_steps,
+            headless=not run_mode
+        )
+        
+        last_screenshot = None
+        
+        for step_data in agent_generator:
+            status_type = step_data.get("status")
             
-        elif status_type == "warning":
-            msg = step_data.get("message")
-            log_message(msg, "warning")
-            
-        elif status_type == "error":
-            msg = step_data.get("message")
-            log_message(msg, "error")
-            status_placeholder.error(msg)
-            if "screenshot" in step_data:
-                preview_placeholder.image(step_data["screenshot"], caption="Error State Screenshot", width="stretch")
+            if status_type == "info":
+                msg = step_data.get("message")
+                log_message(f"({iteration}/{num_iterations}) {msg}", "info")
+                status_placeholder.info(f"[{iteration}/{num_iterations}] {msg}")
                 
-        elif status_type == "step_start":
-            step = step_data.get("step")
-            screenshot = step_data.get("screenshot")
-            elements = step_data.get("elements")
-            log_message(f"Step {step}: Elements annotated. Total fields: {len(elements)}", "info")
-            status_placeholder.warning(f"Step {step}: Form annotated. AI analyzing answers...")
-            preview_placeholder.image(screenshot, caption=f"Step {step} - Annotated Page (Red Badges)", width="stretch")
-            
-        elif status_type == "ai_response":
-            reasoning = step_data.get("reasoning")
-            actions = step_data.get("actions")
-            nav_id = step_data.get("navigation_action_id")
-            
-            # Render Reasoning
-            reasoning_placeholder.markdown(f"""
-            <div class="reasoning-box">
-                <div class="reasoning-title">🧠 AI Reasoning / Persona Alignment</div>
-                <div>{reasoning}</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            log_message(f"AI Reasoning: {reasoning}", "info")
-            log_message(f"AI planned {len(actions)} filling actions. Next/Submit Button ID: {nav_id}", "info")
-            
-        elif status_type == "step_end":
-            step = step_data.get("step")
-            screenshot = step_data.get("screenshot")
-            status_placeholder.success(f"Step {step}: Fields filled successfully!")
-            preview_placeholder.image(screenshot, caption=f"Step {step} - Post-Fill State", width="stretch")
-            
-        elif status_type == "success":
-            msg = step_data.get("message")
-            log_message(msg, "success")
-            status_placeholder.success(f"🎉 Success: {msg}")
-            if "screenshot" in step_data:
-                preview_placeholder.image(step_data["screenshot"], caption="Confirmation Screen", width="stretch")
+            elif status_type == "warning":
+                msg = step_data.get("message")
+                log_message(f"({iteration}/{num_iterations}) {msg}", "warning")
                 
-        elif status_type == "finished":
-            log_message("Survey session ended.", "success")
-            # Clear running status after a brief delay
-            time.sleep(1)
+            elif status_type == "error":
+                msg = step_data.get("message")
+                log_message(f"({iteration}/{num_iterations}) {msg}", "error")
+                status_placeholder.error(f"[{iteration}/{num_iterations}] {msg}")
+                if "screenshot" in step_data:
+                    preview_placeholder.image(step_data["screenshot"], caption=f"Submission {iteration} - Error State", width="stretch")
+                
+                # Check for fatal validation errors to stop all iterations
+                if "API Key" in msg or "initialize Gemini Client" in msg:
+                    fatal_error = True
+                    
+            elif status_type == "step_start":
+                step = step_data.get("step")
+                screenshot = step_data.get("screenshot")
+                elements = step_data.get("elements")
+                log_message(f"({iteration}/{num_iterations}) Step {step}: Elements annotated. Total fields: {len(elements)}", "info")
+                status_placeholder.warning(f"Submission {iteration}/{num_iterations} | Step {step}: Analyzing answers...")
+                preview_placeholder.image(screenshot, caption=f"Submission {iteration}/{num_iterations} - Step {step} Annotated", width="stretch")
+                
+            elif status_type == "ai_response":
+                reasoning = step_data.get("reasoning")
+                actions = step_data.get("actions")
+                nav_id = step_data.get("navigation_action_id")
+                
+                # Render Reasoning
+                reasoning_placeholder.markdown(f"""
+                <div class="reasoning-box">
+                    <div class="reasoning-title">🧠 AI Reasoning / Persona Alignment (Sub {iteration}/{num_iterations})</div>
+                    <div>{reasoning}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                log_message(f"({iteration}/{num_iterations}) AI Reasoning: {reasoning}", "info")
+                log_message(f"({iteration}/{num_iterations}) AI planned {len(actions)} actions. Next Button: {nav_id}", "info")
+                
+            elif status_type == "step_end":
+                step = step_data.get("step")
+                screenshot = step_data.get("screenshot")
+                status_placeholder.success(f"Submission {iteration}/{num_iterations} | Step {step}: Fields filled!")
+                preview_placeholder.image(screenshot, caption=f"Submission {iteration}/{num_iterations} - Step {step} Filled", width="stretch")
+                
+            elif status_type == "success":
+                msg = step_data.get("message")
+                log_message(f"🎉 Submission {iteration}/{num_iterations} Success: {msg}", "success")
+                status_placeholder.success(f"🎉 Submission {iteration}/{num_iterations}: {msg}")
+                if "screenshot" in step_data:
+                    preview_placeholder.image(step_data["screenshot"], caption=f"Submission {iteration}/{num_iterations} Confirmation Screen", width="stretch")
+                    
+            elif status_type == "finished":
+                log_message(f"Submission {iteration}/{num_iterations} session ended.", "success")
+                time.sleep(2) # brief delay between submissions
+    
+    if fatal_error:
+        log_message("Execution stopped due to a fatal error.", "error")
+        status_placeholder.error("Execution stopped due to a fatal error.")
+    else:
+        log_message(f"All {num_iterations} survey submissions completed successfully!", "success")
+        status_placeholder.success(f"🎉 Completed all {num_iterations} survey submissions!")
