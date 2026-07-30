@@ -3,6 +3,8 @@ import os
 import time
 from dotenv import load_dotenv
 from survey_agent import run_survey_filler
+from google import genai
+from google.genai import types
 
 # Load environment variables (useful for local development)
 load_dotenv()
@@ -14,6 +16,16 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Auto-install Playwright browsers on Streamlit Cloud
+try:
+    if os.environ.get("STREAMLIT_SHARING_AUTHOR") or os.path.exists("/home/appuser"):
+        with st.spinner("Preparing Playwright browser binaries... (First run only)"):
+            import subprocess
+            import sys
+            subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
+except Exception as e:
+    st.sidebar.warning(f"Playwright auto-install notice: {e}")
 
 # Custom Premium Styling
 st.markdown("""
@@ -195,6 +207,23 @@ with st.sidebar:
         help="Specify how many times you want the bot to fill out and submit the survey."
     )
     
+    # Variety / Temperature setting
+    temperature = st.slider(
+        "Response Variety (Temperature)",
+        min_value=0.1,
+        max_value=1.5,
+        value=0.7,
+        step=0.1,
+        help="Higher values make responses more varied and creative. Lower values make them more consistent and repetitive."
+    )
+    
+    # Toggle persona variation
+    mutate_persona = st.toggle(
+        "Vary Persona per Run",
+        value=True,
+        help="Slightly mutate the profile details (age, background, moods) dynamically for each submission so every run feels like a different person matching the archetype."
+    )
+    
     st.markdown("---")
     
     st.markdown("""
@@ -292,15 +321,34 @@ if start_btn:
             break
             
         log_message(f"--- SUBMISSION {iteration}/{num_iterations} STARTING ---", "info")
+        
+        # Determine persona description for this run
+        current_persona = persona_desc
+        if mutate_persona and num_iterations > 1:
+            log_message(f"({iteration}/{num_iterations}) Varying persona profile details dynamically...", "info")
+            try:
+                mutation_client = genai.Client(api_key=api_key)
+                mutate_prompt = f"Given this base archetype: '{persona_desc}', write a slightly unique profile variation for a single individual. Change specific age, mood, minor background details, or specific preferences while keeping the core archetype style intact. Return only the mutated profile description as a single paragraph under 80 words. Do not add intro/outro text."
+                mutation_response = mutation_client.models.generate_content(
+                    model="gemma-4-31b-it",
+                    contents=mutate_prompt,
+                    config=types.GenerateContentConfig(temperature=0.7)
+                )
+                current_persona = mutation_response.text.strip()
+                log_message(f"({iteration}/{num_iterations}) Active Profile: {current_persona}", "info")
+            except Exception as e:
+                log_message(f"({iteration}/{num_iterations}) Could not generate profile mutation: {e}. Using base persona.", "warning")
+        
         status_placeholder.info(f"Submission {iteration}/{num_iterations}: Initializing Playwright...")
         
         # Start generator
         agent_generator = run_survey_filler(
             url=survey_url,
-            persona=persona_desc,
+            persona=current_persona,
             api_key=api_key,
             model_name="gemma-4-31b-it",
             max_steps=max_steps,
+            temperature=temperature,
             headless=not run_mode
         )
         

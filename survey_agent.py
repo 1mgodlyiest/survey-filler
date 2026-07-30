@@ -24,6 +24,7 @@ def run_survey_filler(
     api_key: str, 
     model_name: str = "gemma-4-31b-it",
     max_steps: int = 30,
+    temperature: float = 0.2,
     headless: bool = True
 ) -> Generator[Dict[str, Any], None, None]:
     """
@@ -149,7 +150,7 @@ Instructions:
                         config=types.GenerateContentConfig(
                             response_mime_type="application/json",
                             response_schema=GeminiSurveyResponse,
-                            temperature=0.2
+                            temperature=temperature
                         )
                     )
                     
