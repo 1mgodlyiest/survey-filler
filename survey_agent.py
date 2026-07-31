@@ -28,7 +28,8 @@ def run_survey_filler(
     headless: bool = True,
     timezone_id: Optional[str] = None,
     latitude: Optional[float] = None,
-    longitude: Optional[float] = None
+    longitude: Optional[float] = None,
+    delay_seconds: float = 5.0
 ) -> Generator[Dict[str, Any], None, None]:
     """
     Runs the survey filling agent using Playwright and the Gemini API.
@@ -225,7 +226,7 @@ Instructions:
                                                 except Exception:
                                                     raise Exception(f"All click strategies failed. Standard: {str(e1)}, Force: {str(e2)}, JS: {str(e3)}")
                                     
-                            page.wait_for_timeout(5000) # 5 seconds delay between actions to avoid rate limits
+                            page.wait_for_timeout(int(delay_seconds * 1000)) # dynamic delay between actions to avoid rate limits
                         except Exception as e:
                             yield {"status": "warning", "message": f"Failed to execute action on element [{el_id}]: {str(e)}"}
 
@@ -253,7 +254,7 @@ Instructions:
                         
                         # Wait for page load/navigation to finish
                         yield {"status": "info", "message": "Waiting for next page or submit confirmation..."}
-                        page.wait_for_timeout(5000) # wait for page change and rate limit avoidance
+                        page.wait_for_timeout(int(delay_seconds * 1000)) # wait for page change and rate limit avoidance
                     except Exception as e:
                         yield {"status": "warning", "message": f"Failed to click navigation button [{nav_id}]: {str(e)}"}
                         # Wait anyway

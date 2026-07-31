@@ -367,6 +367,11 @@ if start_btn:
         
         status_placeholder.info(f"Submission {iteration}/{num_iterations}: Initializing Playwright...")
         
+        # Determine delay for this iteration (bouncing pattern: 5, 4, 3, 2, 3, 4, 5...)
+        delay_sequence = [5.0, 4.0, 3.0, 2.0, 3.0, 4.0]
+        current_delay = delay_sequence[(iteration - 1) % len(delay_sequence)]
+        log_message(f"({iteration}/{num_iterations}) Setting click interval to {current_delay} seconds for this iteration.", "info")
+
         # Start generator
         agent_generator = run_survey_filler(
             url=survey_url,
@@ -378,7 +383,8 @@ if start_btn:
             headless=not run_mode,
             timezone_id=timezone_id if enable_emulation else None,
             latitude=latitude if enable_emulation else None,
-            longitude=longitude if enable_emulation else None
+            longitude=longitude if enable_emulation else None,
+            delay_seconds=current_delay
         )
         
         last_screenshot = None
