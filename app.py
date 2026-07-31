@@ -225,6 +225,23 @@ with st.sidebar:
     )
     
     st.markdown("---")
+    st.markdown("### 📍 Location Emulation")
+    enable_emulation = st.toggle(
+        "Emulate Location",
+        value=True,
+        help="Emulate a specific timezone and geolocation coordinates to bypass server-side IP tracking."
+    )
+    if enable_emulation:
+        timezone_id = st.text_input("Timezone ID", value="Asia/Kathmandu", help="IANA timezone database name (e.g., Asia/Kathmandu, America/New_York).")
+        col_lat, col_lon = st.columns(2)
+        latitude = col_lat.number_input("Latitude", value=27.7172, format="%.4f")
+        longitude = col_lon.number_input("Longitude", value=85.3240, format="%.4f")
+    else:
+        timezone_id = None
+        latitude = None
+        longitude = None
+        
+    st.markdown("---")
     
     st.markdown("""
     ### ℹ️ About
@@ -349,7 +366,10 @@ if start_btn:
             model_name="gemma-4-31b-it",
             max_steps=max_steps,
             temperature=temperature,
-            headless=not run_mode
+            headless=not run_mode,
+            timezone_id=timezone_id if enable_emulation else None,
+            latitude=latitude if enable_emulation else None,
+            longitude=longitude if enable_emulation else None
         )
         
         last_screenshot = None

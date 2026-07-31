@@ -25,7 +25,10 @@ def run_survey_filler(
     model_name: str = "gemma-4-31b-it",
     max_steps: int = 30,
     temperature: float = 0.2,
-    headless: bool = True
+    headless: bool = True,
+    timezone_id: Optional[str] = None,
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None
 ) -> Generator[Dict[str, Any], None, None]:
     """
     Runs the survey filling agent using Playwright and the Gemini API.
@@ -60,10 +63,17 @@ def run_survey_filler(
                 headless=headless,
                 args=["--disable-web-security", "--no-sandbox"]
             )
-            context = browser.new_context(
-                viewport={"width": 1280, "height": 800},
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            )
+            context_kwargs = {
+                "viewport": {"width": 1280, "height": 800},
+                "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+            if timezone_id:
+                context_kwargs["timezone_id"] = timezone_id
+            if latitude is not None and longitude is not None:
+                context_kwargs["geolocation"] = {"latitude": latitude, "longitude": longitude}
+                context_kwargs["permissions"] = ["geolocation"]
+                
+            context = browser.new_context(**context_kwargs)
             page = context.new_page()
             
             yield {"status": "info", "message": f"Navigating to {url}..."}
