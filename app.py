@@ -1,6 +1,15 @@
 import streamlit as st
 import os
 import time
+
+# Set timezone for dashboard logs (runs on Linux/Streamlit Cloud)
+try:
+    if os.name != 'nt':
+        os.environ['TZ'] = 'Asia/Kathmandu'
+        time.tzset()
+except Exception:
+    pass
+
 from dotenv import load_dotenv
 from survey_agent import run_survey_filler
 from google import genai
